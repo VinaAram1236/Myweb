@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tag - Multiplayer Game</title>
+
+  <!-- PeerJS lets browsers connect directly to each other over the internet -->
+  <!-- We don't write any server code - this library handles the connection for us -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+
+  <style>
+    body {
+      background: #1c1c28;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: Arial, sans-serif;
+      color: white;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 22px;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 20px;
+    }
+
+    #setupScreen {
+      background: #25253a;
+      border: 1px solid #3a3a55;
+      border-radius: 10px;
+      padding: 28px 32px;
+      width: 360px;
+      text-align: center;
+    }
+
+    #setupScreen h2 {
+      font-size: 16px;
+      margin: 0 0 16px;
+    }
+
+    #setupScreen label {
+      display: block;
+      font-size: 13px;
+      color: #aaa;
+      text-align: left;
+      margin: 14px 0 6px;
+    }
+
+    #setupScreen input {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #1c1c28;
+      color: white;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    .tab-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #1c1c28;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .tab-btn.active {
+      background: #5046E4;
+      color: white;
+      border-color: #5046E4;
+    }
+
+    .big-btn {
+      width: 100%;
+      padding: 11px;
+      margin-top: 18px;
+      border-radius: 6px;
+      border: none;
+      background: #5046E4;
+      color: white;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .big-btn:hover {
+      background: #4038c0;
+    }
+
+    .big-btn:disabled {
+      background: #444;
+      cursor: not-allowed;
+    }
+
+    #roomCodeDisplay {
+      background: #1c1c28;
+      border: 2px dashed #5046E4;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 26px;
+      font-weight: bold;
+      letter-spacing: 3px;
+      margin-top: 14px;
+      display: none;
+    }
+
+    #waitingList {
+      text-align: left;
+      font-size: 13px;
+      color: #aaa;
+      margin-top: 10px;
+    }
+
+    #setupMessage {
+      font-size: 12px;
+      color: #e07050;
+      margin-top: 10px;
+      min-height: 16px;
+    }
+
+    .bot-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
+    }
+
+    .bot-row span {
+      font-size: 13px;
+      color: #aaa;
+    }
+
+    .bot-row input[type="number"] {
+      width: 60px;
+      text-align: center;
+    }
+
+    #gameScreen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .controls-label {
+      font-size: 13px;
+      color: #aaa;
+      margin-bottom: 10px;
+    }
+
+    canvas {
+      border: 2px solid #444;
+      border-radius: 8px;
+      display: block;
+    }
+
+    #scoreboard {
+      margin-top: 12px;
+      width: 700px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .score-chip {
+      background: #25253a;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    #it-banner {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #ff8866;
+      font-weight: bold;
+      height: 18px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <h1>Tag - Multiplayer Game</h1>
+  <div class="subtitle">Whoever is "it" chases everyone else. Get tagged and YOU become it!</div>
+
+  <div id="setupScreen">
+
+    <div class="tab-buttons">
+      <button class="tab-btn active" id="hostTab" onclick="switchTab('host')">Host Game</button>
+      <button class="tab-btn" id="joinTab" onclick="switchTab('join')">Join Game</button>
+    </div>
+
+    <div id="hostPanel">
+      <h2>Start a new game</h2>
+
+      <label>Your name</label>
+      <input type="text" id="hostNameInput" placeholder="Enter your name" maxlength="12">
+
+      <div class="bot-row">
+        <span>Add computer bots (optional)</span>
+        <input type="number" id="botCountInput" value="0" min="0" max="6">
+      </div>
+
+      <button class="big-btn" id="hostStartBtn" onclick="startHosting()">Create Room</button>
+
+      <div id="roomCodeDisplay"></div>
+      <div id="waitingList"></div>
+    </div>
+
+    <div id="joinPanel" class="hidden">
+      <h2>Join a friend's game</h2>
+
+      <label>Your name</label>
+      <input type="text" id="joinNameInput" placeholder="Enter your name" maxlength="12">
+
+      <label>Room code</label>
+      <input type="text" id="roomCodeInput" placeholder="e.g. TAG482" maxlength="8" style="text-transform: uppercase;">
+
+      <button class="big-btn" id="joinStartBtn" onclick="joinGame()">Join Room</button>
+    </div>
+
+    <div id="setupMessage"></div>
+  </div>
+
+  <div id="gameScreen">
+    <div class="controls-label">Move with <b>WASD</b> or <b>Arrow Keys</b></div>
+    <div id="it-banner"></div>
+    <canvas id="gameCanvas" width="700" height="460"></canvas>
+    <div id="scoreboard"></div>
+  </div>
+
+<script>
+
+  let peer = null;
+  let connections = [];
+  let hostConnection = null;
+  let isHost = false;
+  let myId = null;
+  let myName = "";
+
+  let players = {};
+  let nextColorIndex = 0;
+
+  const COLORS = [
+    "#7F77DD", "#D85A30", "#1D9E75", "#D4537E",
+    "#EF9F27", "#85B7EB", "#97C459", "#F09595"
+  ];
+
+  const W = 700, H = 460;
+  const PLAYER_SIZE = 32;
+  const SPEED = 3;
+  const TAG_COOLDOWN_FRAMES = 90;
+
+  function switchTab(which) {
+    document.getElementById("hostTab").classList.toggle("active", which === "host");
+    document.getElementById("joinTab").classList.toggle("active", which === "join");
+    document.getElementById("hostPanel").classList.toggle("hidden", which !== "host");
+    document.getElementById("joinPanel").classList.toggle("hidden", which !== "join");
+    setMessage("");
+  }
+
+  function setMessage(text, isError) {
+    const el = document.getElementById("setupMessage");
+    el.textContent = text;
+    el.style.color = isError ? "#e07050" : "#7fd99f";
+  }
+
+  function makeRoomCode() {
+    const num = Math.floor(100 + Math.random() * 900);
+    return "TAG" + num;
+  }
+
+  function startHosting() {
+    const name = document.getElementById("hostNameInput").value.trim();
+    if (!name) {
+      setMessage("Please enter your name first.", true);
+      return;
+    }
+
+    myName = name;
+    isHost = true;
+    const roomCode = makeRoomCode();
+
+    peer = new Peer(roomCode);
+
+    document.getElementById("hostStartBtn").disabled = true;
+    setMessage("Setting up room...");
+
+    peer.on("open", function (id) {
+      document.getElementById("roomCodeDisplay").textContent = id;
+      document.getElementById("roomCodeDisplay").style.display = "block";
+      setMessage("Room is live! Share this code with your friends.");
+
+      myId = id;
+      addPlayer(myId, myName, false);
+
+      const botCount = Math.min(6, Math.max(0, parseInt(document.getElementById("botCountInput").value) || 0));
+      for (let i = 0; i < botCount; i++) {
+        addPlayer("bot_" + i, "bot " + (i + 1), true);
+      }
+
+      updateWaitingList();
+    });
+
+    peer.on("connection", function (conn) {
+      connections.push(conn);
+
+      conn.on("open", function () {
+        setMessage((connections.length) + " friend(s) connected.");
+      });
+
+      conn.on("data", function (data) {
+        handleHostMessage(conn, data);
+      });
+
+      conn.on("close", function () {
+        connections = connections.filter(c => c !== conn);
+        delete players[conn.peerId];
+        updateWaitingList();
+        broadcastState();
+      });
+    });
+
+    peer.on("error", function (err) {
+      setMessage("Connection error: " + err.type, true);
+      document.getElementById("hostStartBtn").disabled = false;
+    });
+  }
+
+  function updateWaitingList() {
+    const list = document.getElementById("waitingList");
+    const names = Object.values(players).map(p => p.name + (p.isBot ? " (bot)" : ""));
+    list.innerHTML = "Players in room: " + names.join(", ") +
+      "<br><br><button class='big-btn' onclick='hostBeginGame()'>Start Game!</button>";
+  }
+
+  function handleHostMessage(conn, data) {
+    if (data.type === "join") {
+      conn.peerId = data.playerId;
+      addPlayer(data.playerId, data.name, false);
+      updateWaitingList();
+      broadcastState();
+    }
+    else if (data.type === "move") {
+      if (players[data.playerId]) {
+        players[data.playerId].x = data.x;
+        players[data.playerId].y = data.y;
+      }
+    }
+  }
+
+  function hostBeginGame() {
+    showGameScreen();
+
+    const ids = Object.keys(players);
+    const itId = ids[Math.floor(Math.random() * ids.length)];
+    players[itId].isIt = true;
+
+    broadcastState();
+
+    connections.forEach(c => c.send({ type: "gameStart" }));
+
+    startGameLoop();
+  }
+
+  function broadcastState() {
+    const message = { type: "state", players: players };
+    connections.forEach(c => c.send(message));
+  }
+
+  function joinGame() {
+    const name = document.getElementById("joinNameInput").value.trim();
+    const roomCode = document.getElementById("roomCodeInput").value.trim().toUpperCase();
+
+    if (!name) {
+      setMessage("Please enter your name.", true);
+      return;
+    }
+    if (!roomCode) {
+      setMessage("Please enter a room code.", true);
+      return;
+    }
+
+    myName = name;
+    isHost = false;
+
+    document.getElementById("joinStartBtn").disabled = true;
+    setMessage("Connecting...");
+
+    peer = new Peer();
+
+    peer.on("open", function (id) {
+      myId = id;
+
+      hostConnection = peer.connect(roomCode);
+
+      hostConnection.on("open", function () {
+        setMessage("Connected! Waiting for host to start the game...");
+        hostConnection.send({ type: "join", playerId: myId, name: myName });
+      });
+
+      hostConnection.on("data", function (data) {
+        handleJoinerMessage(data);
+      });
+
+      hostConnection.on("close", function () {
+        setMessage("Disconnected from host.", true);
+      });
+    });
+
+    peer.on("error", function (err) {
+      setMessage("Could not connect: " + err.type, true);
+      document.getElementById("joinStartBtn").disabled = false;
+    });
+  }
+
+  function handleJoinerMessage(data) {
+    if (data.type === "state") {
+      players = data.players;
+    }
+    else if (data.type === "gameStart") {
+      showGameScreen();
+      startGameLoop();
+    }
+  }
+
+  function sendPositionToHost() {
+    if (hostConnection && hostConnection.open) {
+      hostConnection.send({
+        type: "move",
+        playerId: myId,
+        x: players[myId].x,
+        y: players[myId].y
+      });
+    }
+  }
+
+  function addPlayer(id, name, isBot) {
+    players[id] = {
+      name: name,
+      color: COLORS[nextColorIndex % COLORS.length],
+      x: 50 + Math.random() * (W - 100),
+      y: 50 + Math.random() * (H - 100),
+      isBot: isBot,
+      isIt: false,
+      tagCooldown: 0,
+      score: 0,
+      botTargetX: W / 2,
+      botTargetY: H / 2,
+      botTimer: 0
+    };
+    nextColorIndex++;
+  }
+
+  function showGameScreen() {
+    document.getElementById("setupScreen").style.display = "none";
+    document.getElementById("gameScreen").style.display = "flex";
+  }
+
+  const keysDown = {};
+
+  window.addEventListener("keydown", function (e) {
+    keysDown[e.key.toLowerCase()] = true;
+    if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) {
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener("keyup", function (e) {
+    keysDown[e.key.toLowerCase()] = false;
+  });
+
+  function getMyMovement() {
+    let vx = 0, vy = 0;
+    if (keysDown["w"] || keysDown["arrowup"])    vy = -SPEED;
+    if (keysDown["s"] || keysDown["arrowdown"])  vy =  SPEED;
+    if (keysDown["a"] || keysDown["arrowleft"])  vx = -SPEED;
+    if (keysDown["d"] || keysDown["arrowright"]) vx =  SPEED;
+    if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
+    return { vx, vy };
+  }
+
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  let lastSentX = null, lastSentY = null;
+
+  function startGameLoop() {
+    requestAnimationFrame(gameLoop);
+  }
+
+  function gameLoop() {
+
+    if (players[myId]) {
+      const { vx, vy } = getMyMovement();
+      players[myId].x = Math.max(0, Math.min(W - PLAYER_SIZE, players[myId].x + vx));
+      players[myId].y = Math.max(0, Math.min(H - PLAYER_SIZE, players[myId].y + vy));
+
+      if (players[myId].x !== lastSentX || players[myId].y !== lastSentY) {
+        if (isHost) {
+        } else {
+          sendPositionToHost();
+        }
+        lastSentX = players[myId].x;
+        lastSentY = players[myId].y;
+      }
+    }
+
+    if (isHost) {
+      Object.keys(players).forEach(function (id) {
+        const p = players[id];
+        if (p.isBot) {
+          moveBot(p);
+        }
+        if (p.tagCooldown > 0) p.tagCooldown--;
+      });
+
+      checkForTags();
+      broadcastState();
+    }
+
+    drawEverything();
+    updateScoreboard();
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  function moveBot(p) {
+    p.botTimer--;
+
+    if (p.isIt) {
+      let nearestId = null, nearestDist = Infinity;
+      Object.keys(players).forEach(function (otherId) {
+        if (otherId === Object.keys(players).find(k => players[k] === p)) return;
+        const other = players[otherId];
+        if (other === p) return;
+        const dx = other.x - p.x, dy = other.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < nearestDist) { nearestDist = dist; nearestId = otherId; }
+      });
+      if (nearestId) {
+        const target = players[nearestId];
+        const dx = target.x - p.x, dy = target.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 1) {
+          p.x += (dx / dist) * SPEED * 0.9;
+          p.y += (dy / dist) * SPEED * 0.9;
+        }
+      }
+    } else {
+      const itId = Object.keys(players).find(k => players[k].isIt);
+      if (itId) {
+        const itPlayer = players[itId];
+        const dx = p.x - itPlayer.x, dy = p.y - itPlayer.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 110 && dist > 0.1) {
+          p.x += (dx / dist) * SPEED;
+          p.y += (dy / dist) * SPEED;
+          p.botTimer = 0;
+        }
+      }
+
+      if (p.botTimer <= 0) {
+        p.botTargetX = 30 + Math.random() * (W - 60);
+        p.botTargetY = 30 + Math.random() * (H - 60);
+        p.botTimer = 60 + Math.random() * 90;
+      }
+      const dx = p.botTargetX - p.x, dy = p.botTargetY - p.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 4) {
+        p.x += (dx / dist) * SPEED * 0.7;
+        p.y += (dy / dist) * SPEED * 0.7;
+      }
+    }
+
+    p.x = Math.max(0, Math.min(W - PLAYER_SIZE, p.x));
+    p.y = Math.max(0, Math.min(H - PLAYER_SIZE, p.y));
+  }
+
+  function checkForTags() {
+    const itId = Object.keys(players).find(k => players[k].isIt);
+    if (!itId) return;
+
+    const itPlayer = players[itId];
+    if (itPlayer.tagCooldown > 0) return;
+
+    Object.keys(players).forEach(function (otherId) {
+      if (otherId === itId) return;
+      const other = players[otherId];
+      if (other.tagCooldown > 0) return;
+
+      const dx = (itPlayer.x + PLAYER_SIZE / 2) - (other.x + PLAYER_SIZE / 2);
+      const dy = (itPlayer.y + PLAYER_SIZE / 2) - (other.y + PLAYER_SIZE / 2);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < PLAYER_SIZE * 0.85) {
+        itPlayer.isIt = false;
+        itPlayer.score = (itPlayer.score || 0) + 1;
+        itPlayer.tagCooldown = TAG_COOLDOWN_FRAMES;
+
+        other.isIt = true;
+        other.tagCooldown = TAG_COOLDOWN_FRAMES;
+      }
+    });
+  }
+
+  function drawEverything() {
+    ctx.fillStyle = "#1c1c28";
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.04)";
+    for (let x = 0; x < W; x += 55) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 55) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    Object.keys(players).forEach(function (id) {
+      drawPlayer(players[id], id === myId);
+    });
+
+    const itPlayer = Object.values(players).find(p => p.isIt);
+    document.getElementById("it-banner").textContent = itPlayer ? (itPlayer.name + " is IT! Run!") : "";
+  }
+
+  function drawPlayer(p, isMe) {
+    const r = 7;
+
+    if (p.isIt) {
+      ctx.fillStyle = "rgba(226, 75, 74, 0.25)";
+      ctx.beginPath();
+      ctx.arc(p.x + PLAYER_SIZE / 2, p.y + PLAYER_SIZE / 2, PLAYER_SIZE / 2 + 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = (p.tagCooldown > 0 && Math.floor(p.tagCooldown / 6) % 2 === 0) ? 0.4 : 1;
+
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.moveTo(p.x + r, p.y);
+    ctx.lineTo(p.x + PLAYER_SIZE - r, p.y);
+    ctx.arcTo(p.x + PLAYER_SIZE, p.y, p.x + PLAYER_SIZE, p.y + r, r);
+    ctx.lineTo(p.x + PLAYER_SIZE, p.y + PLAYER_SIZE - r);
+    ctx.arcTo(p.x + PLAYER_SIZE, p.y + PLAYER_SIZE, p.x + PLAYER_SIZE - r, p.y + PLAYER_SIZE, r);
+    ctx.lineTo(p.x + r, p.y + PLAYER_SIZE);
+    ctx.arcTo(p.x, p.y + PLAYER_SIZE, p.x, p.y + PLAYER_SIZE - r, r);
+    ctx.lineTo(p.x, p.y + r);
+    ctx.arcTo(p.x, p.y, p.x + r, p.y, r);
+    ctx.closePath();
+    ctx.fill();
+
+    if (isMe) {
+      ctx.strokeStyle = "rgba(255,255,255,0.8)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 11px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(p.name + (p.isIt ? " (IT)" : ""), p.x + PLAYER_SIZE / 2, p.y - 6);
+  }
+
+  function updateScoreboard() {
+    const board = document.getElementById("scoreboard");
+    const sorted = Object.values(players).slice().sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    board.innerHTML = sorted.map(function (p) {
+      return '<div class="score-chip"><span class="color-dot" style="background:' + p.color + '"></span>' +
+        p.name + ': ' + (p.score || 0) + '</div>';
+    }).join("");
+  }
+
+</script>
+</body>
+</html>
